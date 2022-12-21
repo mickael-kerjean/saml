@@ -726,7 +726,7 @@ func (sm StatusDetail) Element() *etree.Element {
 //
 // See http://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf §2.3.3
 type Assertion struct {
-	XMLName      xml.Name  `xml:"urn:oasis:names:tc:SAML:2.0:assertion Assertion"`
+	XMLName      xml.Name  `xml:"Assertion"`
 	ID           string    `xml:",attr"`
 	IssueInstant time.Time `xml:",attr"`
 	Version      string    `xml:",attr"`
