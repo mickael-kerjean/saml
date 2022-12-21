@@ -1009,45 +1009,47 @@ func (sp *ServiceProvider) validateAssertion(assertion *Assertion, possibleReque
 	if assertion.IssueInstant.Add(MaxIssueDelay).Before(now) {
 		return fmt.Errorf("expired on %s", assertion.IssueInstant.Add(MaxIssueDelay))
 	}
-	if assertion.Issuer.Value != sp.IDPMetadata.EntityID {
-		return fmt.Errorf("issuer is not %q", sp.IDPMetadata.EntityID)
-	}
-	for _, subjectConfirmation := range assertion.Subject.SubjectConfirmations {
-		requestIDvalid := false
+	// if assertion.Issuer.Value != sp.IDPMetadata.EntityID {
+	// 	return fmt.Errorf("issuer is not %q - got %q", sp.IDPMetadata.EntityID, assertion.Issuer.Value)
+	// }
+	if assertion.Subject != nil {
+		for _, subjectConfirmation := range assertion.Subject.SubjectConfirmations {
+			requestIDvalid := false
 
-		// We *DO NOT* validate InResponseTo when AllowIDPInitiated is set. Here's why:
-		//
-		// The SAML specification does not provide clear guidance for handling InResponseTo for IDP-initiated
-		// requests where there is no request to be in response to. The specification says:
-		//
-		//   InResponseTo [Optional]
-		//       The ID of a SAML protocol message in response to which an attesting entity can present the
-		//       assertion. For example, this attribute might be used to correlate the assertion to a SAML
-		//       request that resulted in its presentation.
-		//
-		// The initial thought was that we should specify a single empty string in possibleRequestIDs for IDP-initiated
-		// requests so that we would ensure that an InResponseTo was *not* provided in those cases where it wasn't
-		// expected. Even that turns out to be frustrating for users. And in practice some IDPs (e.g. Rippling)
-		// set a specific non-empty value for InResponseTo in IDP-initiated requests.
-		//
-		// Finally, it is unclear that there is significant security value in checking InResponseTo when we allow
-		// IDP initiated assertions.
-		if !sp.AllowIDPInitiated {
-			for _, possibleRequestID := range possibleRequestIDs {
-				if subjectConfirmation.SubjectConfirmationData.InResponseTo == possibleRequestID {
-					requestIDvalid = true
-					break
+			// We *DO NOT* validate InResponseTo when AllowIDPInitiated is set. Here's why:
+			//
+			// The SAML specification does not provide clear guidance for handling InResponseTo for IDP-initiated
+			// requests where there is no request to be in response to. The specification says:
+			//
+			//   InResponseTo [Optional]
+			//       The ID of a SAML protocol message in response to which an attesting entity can present the
+			//       assertion. For example, this attribute might be used to correlate the assertion to a SAML
+			//       request that resulted in its presentation.
+			//
+			// The initial thought was that we should specify a single empty string in possibleRequestIDs for IDP-initiated
+			// requests so that we would ensure that an InResponseTo was *not* provided in those cases where it wasn't
+			// expected. Even that turns out to be frustrating for users. And in practice some IDPs (e.g. Rippling)
+			// set a specific non-empty value for InResponseTo in IDP-initiated requests.
+			//
+			// Finally, it is unclear that there is significant security value in checking InResponseTo when we allow
+			// IDP initiated assertions.
+			if !sp.AllowIDPInitiated {
+				for _, possibleRequestID := range possibleRequestIDs {
+					if subjectConfirmation.SubjectConfirmationData.InResponseTo == possibleRequestID {
+						requestIDvalid = true
+						break
+					}
+				}
+				if !requestIDvalid {
+					return fmt.Errorf("assertion SubjectConfirmation one of the possible request IDs (%v)", possibleRequestIDs)
 				}
 			}
-			if !requestIDvalid {
-				return fmt.Errorf("assertion SubjectConfirmation one of the possible request IDs (%v)", possibleRequestIDs)
+			if subjectConfirmation.SubjectConfirmationData.Recipient != sp.AcsURL.String() {
+				return fmt.Errorf("assertion SubjectConfirmation Recipient is not %s", sp.AcsURL.String())
 			}
-		}
-		if subjectConfirmation.SubjectConfirmationData.Recipient != sp.AcsURL.String() {
-			return fmt.Errorf("assertion SubjectConfirmation Recipient is not %s", sp.AcsURL.String())
-		}
-		if subjectConfirmation.SubjectConfirmationData.NotOnOrAfter.Add(MaxClockSkew).Before(now) {
-			return fmt.Errorf("assertion SubjectConfirmationData is expired")
+			if subjectConfirmation.SubjectConfirmationData.NotOnOrAfter.Add(MaxClockSkew).Before(now) {
+				return fmt.Errorf("assertion SubjectConfirmationData is expired")
+			}
 		}
 	}
 	if assertion.Conditions.NotBefore.Add(-MaxClockSkew).After(now) {
